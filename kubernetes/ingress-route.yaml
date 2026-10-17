@@ -31,7 +31,7 @@ spec:
   - kind: Rule
     match: Host(`espresso-shop.dev.webforxtech.com`)
     services:
-    - name: espresso-shop-web-svc
-      port: 8090
+    - name: espresso_shop-web-svc
+      port: 6090
   tls:
-    secretName: espresso-shop-tls
+    secretName: espresso_shop-tls
