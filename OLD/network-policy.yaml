@@ -1,0 +1,135 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-to-web
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  podSelector:
+    matchLabels:
+      app: espresso-shop-web
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - protocol: TCP
+      port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-to-product-catalog
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  podSelector:
+    matchLabels:
+      app: espresso-shop-product-catalog
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: espresso-shop-web
+    ports:
+    - protocol: TCP
+      port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-to-reviews
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  podSelector:
+    matchLabels:
+      app: espresso-shop-reviews
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: espresso-shop-web
+    ports:
+    - protocol: TCP
+      port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-egress-to-services
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  podSelector:
+    matchLabels:
+      app: espresso-shop-web
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: espresso-shop-product-catalog
+    ports:
+    - protocol: TCP
+      port: 80
+  - to:
+    - podSelector:
+        matchLabels:
+          app: espresso-shop-reviews
+    ports:
+    - protocol: TCP
+      port: 80

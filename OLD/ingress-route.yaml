@@ -1,0 +1,37 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: espresso-shop-tls
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  secretName: espresso-shop-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - espresso-shop.dev.webforxtech.com
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: espresso-shop-web
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: espresso-shop.dev.webforxtech.com
+    external-dns.alpha.kubernetes.io/target: 20.83.137.122
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - kind: Rule
+    match: Host(`espresso-shop.dev.webforxtech.com`)
+    services:
+    - name: espresso-shop-web-svc
+      port: 8090
+  tls:
+    secretName: espresso-shop-tls

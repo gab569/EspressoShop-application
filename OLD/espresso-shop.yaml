@@ -1,0 +1,492 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: expresso-shop
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: espresso-shop-config
+  namespace: expresso-shop
+data:
+  ProductCatalogUrl: "http://espresso-shop-product-catalog-svc:8091"
+  ReviewsUrl: "http://espresso-shop-reviews-svc:8092"
+  ReviewsVersionV1: "v1"
+  ReviewsVersionV2: "v2"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: espresso-shop
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: espresso-shop-data
+  namespace: expresso-shop
+  labels:
+    company_name: webforx
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: azurefile-csi
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: espresso-shop-auth
+  namespace: expresso-shop
+type: Opaque
+stringData:
+  admin-email: "admin@example.com"
+  admin-password: "change-me-admin"
+  user-email: "hossam@example.com"
+  user-password: "change-me-user"
+---
+###############################################
+## Espresso Shop Web
+###############################################
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: espresso-shop-web
+  namespace: expresso-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: espresso-shop-web
+  template:
+    metadata:
+      labels:
+        app: espresso-shop-web
+        version: v1
+        company_name: webforx
+    spec:
+      serviceAccountName: espresso-shop
+      automountServiceAccountToken: false
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: espresso-shop-data
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            company_name: webforx
+      containers:
+      - image: hossambarakat/espresso-shop-web
+        # imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
+        name: espresso-shop-web
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: shared-data
+          mountPath: /data
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        env:
+        - name: ProductCatalogUrl
+          valueFrom:
+            configMapKeyRef:
+              name: espresso-shop-config
+              key: ProductCatalogUrl
+        - name: ReviewsUrl
+          valueFrom:
+            configMapKeyRef:
+              name: espresso-shop-config
+              key: ReviewsUrl
+        - name: Authentication__AdminEmail
+          valueFrom:
+            secretKeyRef:
+              name: espresso-shop-auth
+              key: admin-email
+        - name: Authentication__AdminPassword
+          valueFrom:
+            secretKeyRef:
+              name: espresso-shop-auth
+              key: admin-password
+        - name: Authentication__UserEmail
+          valueFrom:
+            secretKeyRef:
+              name: espresso-shop-auth
+              key: user-email
+        - name: Authentication__UserPassword
+          valueFrom:
+            secretKeyRef:
+              name: espresso-shop-auth
+              key: user-password
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: espresso-shop-web-svc
+  namespace: expresso-shop
+spec:
+  selector:
+    app: espresso-shop-web
+  type: ClusterIP
+  ports:
+  - port: 8090
+    targetPort: 80
+    name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: espresso-shop-web
+  namespace: expresso-shop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: espresso-shop-web
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+###############################################
+## Espresso Shop Product Catalog
+###############################################
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: espresso-shop-product-catalog
+  namespace: expresso-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: espresso-shop-product-catalog
+  template:
+    metadata:
+      labels:
+        app: espresso-shop-product-catalog
+        version: v1
+        company_name: webforx
+    spec:
+      serviceAccountName: espresso-shop
+      automountServiceAccountToken: false
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: espresso-shop-data
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            company_name: webforx
+      containers:
+      - image: hossambarakat/espresso-shop-product-catalog
+        # imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
+        name: espresso-shop-product-catalog
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: shared-data
+          mountPath: /data
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/products
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: espresso-shop-product-catalog-svc
+  namespace: expresso-shop
+spec:
+  selector:
+    app: espresso-shop-product-catalog
+  type: ClusterIP
+  ports:
+  - port: 8091
+    targetPort: 80
+    name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: espresso-shop-product-catalog
+  namespace: expresso-shop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: espresso-shop-product-catalog
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+###############################################
+## Espresso Shop Reviews V1
+###############################################
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: espresso-shop-reviews-v1
+  namespace: expresso-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: espresso-shop-reviews
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: espresso-shop-reviews
+        version: v1
+        company_name: webforx
+    spec:
+      serviceAccountName: espresso-shop
+      automountServiceAccountToken: false
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: espresso-shop-data
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            company_name: webforx
+      containers:
+      - image: hossambarakat/espresso-shop-reviews
+        # imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
+        name: espresso-shop-reviews
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: shared-data
+          mountPath: /data
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/version
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        env:
+        - name: SERVICE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: espresso-shop-config
+              key: ReviewsVersionV1
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+
+###############################################
+## Espresso Shop Reviews V2
+###############################################
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: espresso-shop-reviews-v2
+  namespace: expresso-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: espresso-shop-reviews
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: espresso-shop-reviews
+        version: v2
+        company_name: webforx
+    spec:
+      serviceAccountName: espresso-shop
+      automountServiceAccountToken: false
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: espresso-shop-data
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            company_name: webforx
+      containers:
+      - image: hossambarakat/espresso-shop-reviews
+        # imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
+        name: espresso-shop-reviews
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: shared-data
+          mountPath: /data
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/version
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        env:
+        - name: SERVICE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: espresso-shop-config
+              key: ReviewsVersionV2
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: espresso-shop-reviews-svc
+  namespace: expresso-shop
+spec:
+  selector:
+    app: espresso-shop-reviews
+  type: ClusterIP
+  ports:
+  - port: 8092
+    targetPort: 80
+    name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: espresso-shop-reviews-v1
+  namespace: expresso-shop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: espresso-shop-reviews-v1
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: espresso-shop-reviews-v2
+  namespace: expresso-shop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: espresso-shop-reviews-v2
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

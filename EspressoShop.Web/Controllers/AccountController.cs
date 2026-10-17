@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace EspressoShop.Web.Controllers
@@ -15,10 +16,12 @@ namespace EspressoShop.Web.Controllers
     public class AccountController : Controller
     {
         private readonly ILogger<AccountController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public AccountController(ILogger<AccountController> logger)
+        public AccountController(ILogger<AccountController> logger, IConfiguration configuration)
         {
             _logger = logger;
+            _configuration = configuration;
         }
 
         [AllowAnonymous]
@@ -66,10 +69,13 @@ namespace EspressoShop.Web.Controllers
 
         private ClaimsIdentity AuthenticateUser(string email, string password)
         {
-            // For demonstration purposes, authenticate a user 
-            // with a static email address. Ignore the password.
+            var adminEmail = _configuration["Authentication:AdminEmail"] ?? "admin@example.com";
+            var adminPassword = _configuration["Authentication:AdminPassword"];
+            var userEmail = _configuration["Authentication:UserEmail"] ?? "hossam@example.com";
+            var userPassword = _configuration["Authentication:UserPassword"];
 
-            if (email == "admin@example.com")
+            if (email == adminEmail &&
+                (string.IsNullOrEmpty(adminPassword) || password == adminPassword))
             {
                 var claims = new List<Claim>
                 {
@@ -82,7 +88,8 @@ namespace EspressoShop.Web.Controllers
 
                 return claimsIdentity;
             }
-            if (email == "hossam@example.com")
+            if (email == userEmail &&
+                (string.IsNullOrEmpty(userPassword) || password == userPassword))
             {
                 var claims = new List<Claim>
                 {
