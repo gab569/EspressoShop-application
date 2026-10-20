@@ -57,7 +57,7 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: espresso-shop-web
-  namespace: expresso_shop
+  namespace: expresso-shop
 spec:
   replicas: 1
   selector:
@@ -167,7 +167,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: espresso-shop-web
-  namespace: expresso_shop
+  namespace: expresso-shop
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -369,7 +369,7 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: espresso-shop-reviews-v2
-  namespace: expresso
+  namespace: expresso-shop
 spec:
   replicas: 1
   selector:
